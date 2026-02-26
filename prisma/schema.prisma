@@ -12,3 +12,306 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ─────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────
+
+enum InterviewMode {
+  ROLE
+  TOPICS
+  RESUME
+}
+
+enum DifficultyLevel {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum SessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum ConfidenceLevel {
+  low
+  medium
+  high
+}
+
+enum EnglishMode {
+  FREE
+  SCENARIO
+}
+
+enum EnglishLevel {
+  CASUAL
+  PROFESSIONAL
+}
+
+enum MessageRole {
+  USER
+  AI
+}
+
+// ─────────────────────────────────────────
+// NEXTAUTH TABLES
+// ─────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts          Account[]
+  sessions          Session[]
+  resumes           Resume[]
+  interviewConfigs  InterviewConfig[]
+  interviewSessions InterviewSession[]
+  englishSessions   EnglishSession[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─────────────────────────────────────────
+// INTERVIEW FEATURE
+// ─────────────────────────────────────────
+
+model Resume {
+  id          String   @id @default(cuid())
+  userId      String
+  fileName    String
+  rawText     String   @db.Text
+  profileJson Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions InterviewSession[]
+
+  @@index([userId])
+  @@map("resumes")
+}
+
+model InterviewConfig {
+  id             String          @id @default(cuid())
+  userId         String
+  mode           InterviewMode
+  role           String?
+  topics         String[]        @default([])
+  difficulty     DifficultyLevel @default(MEDIUM)
+  numQuestions   Int?
+  timeLimitMins  Int?
+  noRepeats      Boolean         @default(true)
+  focusWeakAreas Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session InterviewSession?
+
+  @@index([userId])
+  @@map("interview_configs")
+}
+
+model InterviewSession {
+  id        String        @id @default(cuid())
+  configId  String        @unique
+  resumeId  String?
+  userId    String
+  status    SessionStatus @default(IN_PROGRESS)
+  startedAt DateTime      @default(now())
+  endedAt   DateTime?
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  config    InterviewConfig  @relation(fields: [configId], references: [id], onDelete: Cascade)
+  resume    Resume?          @relation(fields: [resumeId], references: [id])
+  questions Question[]
+  report    InterviewReport?
+
+  @@index([userId])
+  @@map("interview_sessions")
+}
+
+model Question {
+  id               String          @id @default(cuid())
+  sessionId        String
+  parentQuestionId String?
+  isFollowUp       Boolean         @default(false)
+  questionText     String          @db.Text
+  questionHash     String
+  topic            String
+  difficulty       DifficultyLevel
+  expectedPoints   Json
+  followUpTriggers Json
+  orderIndex       Int
+  createdAt        DateTime        @default(now())
+
+  session        InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  parentQuestion Question?        @relation("QuestionFollowUps", fields: [parentQuestionId], references: [id])
+  followUps      Question[]       @relation("QuestionFollowUps")
+  answer         Answer?
+
+  @@index([sessionId])
+  @@index([sessionId, questionHash])
+  @@map("questions")
+}
+
+model Answer {
+  id          String   @id @default(cuid())
+  questionId  String   @unique
+  answerText  String   @db.Text
+  submittedAt DateTime @default(now())
+
+  question   Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  evaluation Evaluation?
+
+  @@map("answers")
+}
+
+model Evaluation {
+  id                 String          @id @default(cuid())
+  answerId           String          @unique
+  score              Int
+  strengths          Json
+  missingPoints      Json
+  feedback           String          @db.Text
+  nextFocusTopic     String?
+  confidenceInAnswer ConfidenceLevel
+  createdAt          DateTime        @default(now())
+
+  answer Answer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+
+  @@map("evaluations")
+}
+
+model InterviewReport {
+  id              String   @id @default(cuid())
+  sessionId       String   @unique
+  overallScore    Float
+  topicScores     Json
+  strengths       Json
+  weaknesses      Json
+  improvementTips Json
+  createdAt       DateTime @default(now())
+
+  session InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("interview_reports")
+}
+
+// ─────────────────────────────────────────
+// ENGLISH PRACTICE FEATURE
+// ─────────────────────────────────────────
+
+model EnglishSession {
+  id                  String        @id @default(cuid())
+  userId              String
+  mode                EnglishMode
+  level               EnglishLevel
+  status              SessionStatus @default(IN_PROGRESS)
+  overallFluencyScore Float?
+  startedAt           DateTime      @default(now())
+  endedAt             DateTime?
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages EnglishMessage[]
+  report   EnglishReport?
+
+  @@index([userId])
+  @@map("english_sessions")
+}
+
+model EnglishMessage {
+  id         String      @id @default(cuid())
+  sessionId  String
+  role       MessageRole
+  content    String      @db.Text
+  orderIndex Int
+  createdAt  DateTime    @default(now())
+
+  session    EnglishSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  correction EnglishCorrection?
+
+  @@index([sessionId])
+  @@map("english_messages")
+}
+
+model EnglishCorrection {
+  id                    String   @id @default(cuid())
+  messageId             String   @unique
+  originalText          String   @db.Text
+  correctedText         String   @db.Text
+  grammarErrors         Json
+  vocabularySuggestions Json
+  rephrasedVersion      String?  @db.Text
+  toneIssue             String?
+  fluencyScore          Int
+  createdAt             DateTime @default(now())
+
+  message EnglishMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@map("english_corrections")
+}
+
+model EnglishReport {
+  id                   String   @id @default(cuid())
+  sessionId            String   @unique
+  overallFluency       Float
+  grammarScore         Float
+  vocabularyScore      Float
+  toneScore            Float
+  commonMistakes       Json
+  vocabularyHighlights Json
+  improvementTips      Json
+  createdAt            DateTime @default(now())
+
+  session EnglishSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("english_reports")
+}
