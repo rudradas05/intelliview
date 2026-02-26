@@ -215,4 +215,141 @@ No explanation. No markdown. No code fences. No extra text.
 `.trim();
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PROMPT D — English Coach (AI Response + Correction)
+// ─────────────────────────────────────────────────────────────────────────────
+export function buildEnglishCoachPrompt(params: {
+  level: "CASUAL" | "PROFESSIONAL";
+  mode: "FREE" | "SCENARIO";
+  scenarioContext?: string;
+  conversationHistory: { role: "USER" | "AI"; content: string }[];
+  userMessage: string;
+}): string {
+  const levelGuidance =
+    params.level === "PROFESSIONAL"
+      ? `LEVEL: PROFESSIONAL
+- Use formal English in your response
+- No slang, contractions are acceptable but keep tone business-appropriate
+- Flag casual/slang language in corrections as tone issues`
+      : `LEVEL: CASUAL
+- Use friendly, conversational English in your response
+- Contractions and informal phrasing are fine
+- Only flag tone issues if extremely inappropriate`;
+
+  const modeBlock =
+    params.mode === "SCENARIO"
+      ? `MODE: SCENARIO-BASED
+SCENARIO: ${params.scenarioContext}
+- Stay in character as the person in the scenario
+- Respond naturally as that person would
+- Keep the scenario conversation going realistically`
+      : `MODE: FREE CONVERSATION
+- Respond naturally as a friendly English coach
+- Keep conversation flowing and engaging
+- If message is very short (under 5 words), ask a follow-up question`;
+
+  const historyBlock =
+    params.conversationHistory.length > 0
+      ? `RECENT CONVERSATION HISTORY (last ${params.conversationHistory.length} messages):
+${params.conversationHistory
+  .map((m) => `${m.role === "USER" ? "User" : "Coach"}: ${m.content}`)
+  .join("\n")}`
+      : "This is the start of the conversation.";
+
+  return `
+You are a friendly, encouraging English language coach helping a non-native speaker
+improve their English. You have two jobs in every response:
+1. Respond naturally to continue the conversation
+2. Analyze the user's message for language errors
+
+${levelGuidance}
+
+${modeBlock}
+
+${historyBlock}
+
+USER'S MESSAGE TO ANALYZE:
+"""
+${params.userMessage}
+"""
+
+RESPONSE RULES:
+- Keep your AI response to 2–4 sentences maximum
+- Do NOT correct grammar inside your response text — keep it natural
+- Do NOT mention errors in your response text — save all corrections for the JSON fields
+
+CORRECTION RULES:
+- grammarErrors: only flag REAL grammar mistakes (subject-verb agreement,
+  wrong tense, missing articles, wrong prepositions). Ignore minor stylistic choices.
+- vocabularySuggestions: only suggest a better word when a CLEARLY better option exists.
+  Do not suggest synonyms for the sake of it.
+- rephrasedVersion: provide ONLY if there are 2 or more errors OR the sentence sounds
+  very unnatural to a native speaker. Otherwise set to null.
+- toneIssue: only flag if level is PROFESSIONAL AND user used slang or very casual
+  phrasing inappropriate for a business context. Otherwise set to null.
+- fluencyScore: holistic score for THIS message only (0–10).
+  10 = native-like fluency. 0 = incomprehensible.
+  A grammatically perfect short message = 7–8, not automatically 10.
+- correctedText: the full corrected version of the user's message.
+  If no corrections needed, set correctedText equal to originalText.
+- If the message has zero errors: return empty arrays for grammarErrors and
+  vocabularySuggestions, null for rephrasedVersion and toneIssue.
+
+You MUST return ONLY valid JSON matching this exact schema.
+No explanation. No markdown. No code fences. No extra text.
+
+{
+  "aiResponse": string,
+  "correction": {
+    "originalText": string,
+    "correctedText": string,
+    "grammarErrors": [
+      { "error": string, "explanation": string }
+    ],
+    "vocabularySuggestions": [
+      { "original": string, "suggested": string, "reason": string }
+    ],
+    "rephrasedVersion": string | null,
+    "toneIssue": string | null,
+    "fluencyScore": number
+  }
+}
+`.trim();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROMPT E — English Session Opening Message
+// ─────────────────────────────────────────────────────────────────────────────
+export function buildEnglishOpeningPrompt(params: {
+  mode: "FREE" | "SCENARIO";
+  level: "CASUAL" | "PROFESSIONAL";
+}): string {
+  return `
+You are a friendly English language coach starting a new practice session.
+
+MODE: ${params.mode}
+LEVEL: ${params.level}
+
+${
+  params.mode === "FREE"
+    ? `Generate a warm, welcoming opening message that:
+- Greets the user and introduces yourself briefly
+- Invites them to talk about any topic they like
+- Keeps it to 2–3 sentences maximum
+- Tone matches the level: ${params.level === "CASUAL" ? "friendly and relaxed" : "professional but warm"}`
+    : `Generate a realistic scenario prompt that:
+- Sets up a professional situation (job interview, business meeting, client call, etc.)
+- Gives the user a specific role and context
+- Ends with a direct question or prompt for them to respond to
+- Keeps it to 3–4 sentences maximum
+- Make it feel like a real ${params.level === "PROFESSIONAL" ? "professional business" : "everyday"} situation`
+}
+
+You MUST return ONLY valid JSON matching this exact schema.
+No explanation. No markdown. No code fences. No extra text.
+
+{
+  "message": string
+}
+`.trim();
+}
