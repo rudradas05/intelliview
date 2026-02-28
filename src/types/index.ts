@@ -72,15 +72,14 @@ export interface TranscriptItem {
   answer: {
     answerText: string;
     submittedAt: Date;
-  };
-  evaluation: EvaluationResult;
+  } | null;
+  evaluation: EvaluationResult | null;
   followUp?: {
     question: { questionText: string; topic: string };
-    answer: { answerText: string };
-    evaluation: EvaluationResult;
-  };
+    answer: { answerText: string } | null;
+    evaluation: EvaluationResult | null;
+  } | null;
 }
-
 export interface InterviewReportResponse {
   id: string;
   sessionId: string;

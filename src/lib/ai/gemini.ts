@@ -4,10 +4,10 @@ import { z } from "zod";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
+  model: "gemini-2.5-flash",
   generationConfig: {
     temperature: 0.4,
-    maxOutputTokens: 1024,
+    maxOutputTokens: 2048, // ← increased from 1024
     responseMimeType: "application/json",
   },
 });
@@ -15,7 +15,7 @@ const model = genAI.getGenerativeModel({
 export async function generateJSON<T>(
   prompt: string,
   schema: z.ZodSchema<T>,
-  retries = 1
+  retries = 1,
 ): Promise<T> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
